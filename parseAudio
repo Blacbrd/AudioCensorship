@@ -1,85 +1,48 @@
-import speech_recognition as sr
+import whisper
 from pydub import AudioSegment
-from pydub.utils import make_chunks
+import re
 
 # Define constants
 AUDIO_FILE = "Dogs.wav"
-CHUNK_LENGTH_MS = 5000  # Length of each chunk in milliseconds
-OVERLAP_MS = 1000  # Overlap between chunks in milliseconds
+BLACKLIST_FILE = "blackListedWords.txt"
 
+def get_timestamps_with_whisper(audio_file, blacklist_file):
+    # Load the Whisper model
+    model = whisper.load_model("base")
 
-def get_timestamps_for_keywords(audio_file):
-    # Load the audio file with speech recognition
-    audio = AudioSegment.from_file(audio_file)
+    # Load audio and transcribe with timestamps
+    result = model.transcribe(audio_file, word_timestamps=True)
+
+    # Debug: Output full transcription
+    print(f"Full Transcription: {result['text']}")
+
+    # Load blacklisted keywords
+    with open(blacklist_file, "r") as file:
+        keywords = [line.lower().strip() for line in file.readlines()]
     
-    # Split audio into chunks with overlap using pydub
-    chunks = make_chunks(audio, CHUNK_LENGTH_MS - OVERLAP_MS)
+    print(f"Keywords : {keywords}")
 
-    # Initialize recognizer
-    recognizer = sr.Recognizer()
-
-    # Uses the audio file as a source for audio
-    with sr.AudioFile(audio_file) as source:
-        recognizer.adjust_for_ambient_noise(source)
-        audio2 = recognizer.record(source)
-    
-    keywords = []
-    with open("blackListedWords.txt", "r") as file:
-        for line in file.readlines():
-            keywords.append(line.lower().rstrip("\n"))
-
-    # Track timestamps
+    # Find timestamps for blacklisted words
     word_timestamps = []
+    for segment in result["segments"]:
+        for word_info in segment["words"]:
+            word = word_info["word"].lower()
+            start_time = word_info["start"]
+            end_time = word_info["end"]
 
-    # Transcribe each chunk
-    # Enumerate allows us to have an index (i) and the actual value (chunk)
-    # The reason we use chunks is to make it easier for the file to be processed
-    # This is especially good for dealing with really long audio files, where the processor can be overloaded
-    for i, chunk in enumerate(chunks):
-        with sr.AudioFile(chunk.export(format="wav")) as source:
-            audio_data = recognizer.record(source)
+            print(f"Word is : {word}")
 
-            try:
-                # Transcribe the chunk
-                transcription = recognizer.recognize_google(audio_data).lower()
+            # Check if word is blacklisted
+            if word in keywords:
+                word_timestamps.append((word, start_time, end_time))
+                print(f"Keyword '{word}' found from {start_time:.2f}s to {end_time:.2f}s")
 
-                # Calculate start time for the chunk to see which chunk the audio is a part of
-                start_time_ms = max(0, i * (CHUNK_LENGTH_MS - OVERLAP_MS))
-
-                # Debug: Output the transcription of each chunk
-                print(f"Chunk {i}: {transcription}")
-
-                # Search for keywords and calculate timestamps
-                for keyword in keywords:
-                    if keyword in transcription:
-                        # Estimate position in chunk
-                        word_index = transcription.index(keyword)
-                        # Estimate time position in milliseconds
-                        keyword_time_ms = start_time_ms + int((word_index / len(transcription)) * len(chunk))
-                        word_timestamps.append((keyword, keyword_time_ms))
-                        print(f"Keyword '{keyword}' found at {keyword_time_ms}ms")
-
-            except sr.UnknownValueError:
-                print(f"Chunk {i}: Could not understand audio")
-            except sr.RequestError as e:
-                print(f"Error with the speech recognition service: {e}")
-                return
-
-    
-    # Makes sure that the time stamps are in the correct order
-    word_timestamps = sorted(word_timestamps, key= lambda x: x[1])
-
-    # Removes duplicates
-    word_timestamps = list(dict.fromkeys(word_timestamps))
-
-    # Output the results
-    print("\nTimestamps for specified keywords:")
-    for word, timestamp in word_timestamps:
-        print(f"{word}: {timestamp}ms")
-    
     return word_timestamps
 
-# Get timestamps for specified keywords
-word_timestamps = get_timestamps_for_keywords(AUDIO_FILE)
+# Get timestamps for blacklisted words
+word_timestamps = get_timestamps_with_whisper(AUDIO_FILE, BLACKLIST_FILE)
 
-print(f"Word timestamps are : {word_timestamps}")
+# Output the results
+print("\nTimestamps for specified keywords:")
+for word, start, end in word_timestamps:
+    print(f"{word}: {start:.2f}s - {end:.2f}s")

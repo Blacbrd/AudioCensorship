@@ -6,7 +6,12 @@ import re
 AUDIO_FILE = "Dogs.wav"
 BLACKLIST_FILE = "blackListedWords.txt"
 
+# This removes punctuation from words, strips them and makes them into lowercase
+def clean_word(word):
+    return re.sub(r'[^\w\s]', '', word).strip().lower()
+
 def get_timestamps_with_whisper(audio_file, blacklist_file):
+
     # Load the Whisper model
     model = whisper.load_model("base")
 
@@ -16,11 +21,9 @@ def get_timestamps_with_whisper(audio_file, blacklist_file):
     # Debug: Output full transcription
     print(f"Full Transcription: {result['text']}")
 
-    # Load blacklisted keywords
+    # Load blacklisted keywords into an array
     with open(blacklist_file, "r") as file:
         keywords = [line.lower().strip() for line in file.readlines()]
-    
-    print(f"Keywords : {keywords}")
 
     # Find timestamps for blacklisted words
     word_timestamps = []
@@ -30,7 +33,7 @@ def get_timestamps_with_whisper(audio_file, blacklist_file):
             start_time = word_info["start"]
             end_time = word_info["end"]
 
-            print(f"Word is : {word}")
+            word = clean_word(word)
 
             # Check if word is blacklisted
             if word in keywords:
@@ -40,9 +43,7 @@ def get_timestamps_with_whisper(audio_file, blacklist_file):
     return word_timestamps
 
 # Get timestamps for blacklisted words
-word_timestamps = get_timestamps_with_whisper(AUDIO_FILE, BLACKLIST_FILE)
+# word_timestamps = get_timestamps_with_whisper(AUDIO_FILE, BLACKLIST_FILE)
 
-# Output the results
-print("\nTimestamps for specified keywords:")
-for word, start, end in word_timestamps:
-    print(f"{word}: {start:.2f}s - {end:.2f}s")
+# Output word timestamps
+# print(f"word_timestamps is {word_timestamps}")

@@ -5,24 +5,30 @@ import parseAudio
 
 AUDIO_FILE = "audio.wav"
 BLACKLIST_FILE = "blackListedWords.txt"
+CENSOR_FILE = "censor_noise.wav"
 
-def generate_censored_audio(audioFile, blackListFile):
+def generate_censored_audio(audio_file, black_list_file, beep_file):
 
-    word_time_stamps = parseAudio.get_timestamps_with_whisper(audioFile, blackListFile)
+    word_time_stamps = parseAudio.get_timestamps_with_whisper(audio_file, black_list_file)
 
     if len(word_time_stamps) == 0:
         print("Your original audio has no black listed words!")
         return
 
-    audio = pydub.AudioSegment.from_file(audioFile)
+    audio = pydub.AudioSegment.from_file(audio_file)
+    beep = pydub.AudioSegment.from_file(beep_file)
 
     # Process each timestamp and censor the corresponding audio segments
-    # Since audio is re-assigned each time, 
+    # Since audio is re-assigned each time, we keep the previous censors too
     for word, start_time, end_time in word_time_stamps:
+
+        duration = (end_time - start_time) * 1000
+
+        beep_segment = beep[:duration]
 
         audio = (
             audio[:start_time * 1000]
-            + pydub.AudioSegment.silent(duration=(end_time - start_time) * 1000)
+            + beep_segment[:duration]
             + audio[end_time * 1000:]
         )
 
@@ -31,4 +37,4 @@ def generate_censored_audio(audioFile, blackListFile):
 
     print("Censored audio generated successfully!")
 
-generate_censored_audio(AUDIO_FILE, BLACKLIST_FILE)
+generate_censored_audio(AUDIO_FILE, BLACKLIST_FILE, CENSOR_FILE)
